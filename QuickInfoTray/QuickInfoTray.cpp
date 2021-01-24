@@ -2,6 +2,7 @@
 //
 
 #include <string>
+#include <sstream>
 #include <iostream>
 #include "framework.h"
 #include "QuickInfoTray.h"
@@ -19,7 +20,6 @@ class __declspec( uuid( "8DCFC718-F9D0-4813-BBB5-AAE0AF07031D" ) ) QuickInfoIcon
 HINSTANCE hInst;                                // current instance
 WCHAR szTitle[ MAX_LOADSTRING ];                  // The title bar text
 WCHAR szWindowClass[ MAX_LOADSTRING ];            // the main window class name
-BOOL quickInfoVisible;
 
 // Forward declarations of functions included in this code module:
 ATOM                MyRegisterClass( HINSTANCE hInstance );
@@ -50,49 +50,6 @@ int APIENTRY wWinMain( _In_ HINSTANCE hInstance,
 
    HACCEL hAccelTable = LoadAccelerators( hInstance, MAKEINTRESOURCE( IDC_QUICKINFOTRAY ) );
 
-
-   //////// Let's go...
-   ULONG size = sizeof( IP_ADAPTER_INFO );
-   PIP_ADAPTER_INFO pAdapterInfo = (PIP_ADAPTER_INFO) malloc( sizeof( IP_ADAPTER_INFO ) );
-
-   if ( pAdapterInfo == NULL )
-   {
-      MessageBox( NULL, L"Cannot allocate enough memory", L"Error", MB_OK );
-      exit( -1 );
-   }
-
-   ULONG result = ::GetAdaptersInfo( pAdapterInfo, &size );
-   if ( result == ERROR_BUFFER_OVERFLOW )
-   {
-      free( pAdapterInfo );
-      pAdapterInfo = (PIP_ADAPTER_INFO) malloc( size );
-
-      if ( pAdapterInfo == NULL )
-      {
-         MessageBox( NULL, L"Cannot allocate enough memory", L"Error", MB_OK );
-         exit( -1 );
-      }
-
-      result = ::GetAdaptersInfo( pAdapterInfo, &size );
-   }
-
-   PIP_ADAPTER_INFO pAdapter = pAdapterInfo;
-   while ( pAdapter != NULL )
-   {
-      std::string ipAddress = pAdapter->IpAddressList.IpAddress.String;
-
-      std::cout << "-------------------" << std::endl;
-      if ( ipAddress.compare( "0.0.0.0" ) )
-      {
-         std::cout << pAdapter->AdapterName << std::endl;
-         std::cout << pAdapter->IpAddressList.IpAddress.String << std::endl;
-         std::cout << pAdapter->Description << std::endl;
-      }
-      pAdapter = pAdapter->Next;
-   }
-   free( pAdapterInfo );
-   ////////
-
    MSG msg;
 
    // Main message loop:
@@ -108,7 +65,69 @@ int APIENTRY wWinMain( _In_ HINSTANCE hInstance,
    return (int) msg.wParam;
 }
 
+BOOL PopulateInfo( WCHAR* string, size_t length )
+{
+   std::stringstream buffer;
 
+   ULONG size = sizeof( IP_ADAPTER_INFO );
+   PIP_ADAPTER_INFO pAdapterInfo = (PIP_ADAPTER_INFO) malloc( sizeof( IP_ADAPTER_INFO ) );
+
+   if ( pAdapterInfo == NULL )
+   {
+      MessageBox( NULL, L"Cannot allocate enough memory", L"Error", MB_OK );
+      return false;
+   }
+
+   ULONG result = ::GetAdaptersInfo( pAdapterInfo, &size );
+   if ( result == ERROR_BUFFER_OVERFLOW )
+   {
+      free( pAdapterInfo );
+      pAdapterInfo = (PIP_ADAPTER_INFO) malloc( size );
+
+      if ( pAdapterInfo == NULL )
+      {
+         MessageBox( NULL, L"Cannot allocate enough memory", L"Error", MB_OK );
+         return false;
+      }
+
+      result = ::GetAdaptersInfo( pAdapterInfo, &size );
+   }
+
+   PIP_ADAPTER_INFO pAdapter = pAdapterInfo;
+   while ( pAdapter != NULL )
+   {
+      std::string ipAddress = pAdapter->IpAddressList.IpAddress.String;
+      if ( ipAddress.compare( "0.0.0.0" ) != 0 )
+      {
+         buffer << pAdapter->Description << ":" << pAdapter->IpAddressList.IpAddress.String << std::endl;
+      }
+      pAdapter = pAdapter->Next;
+   }
+
+   // Do a reduced version if need be
+   if ( buffer.str().length() > length )
+   {
+      PIP_ADAPTER_INFO pAdapter = pAdapterInfo;
+      while ( pAdapter != NULL )
+      {
+         std::string ipAddress = pAdapter->IpAddressList.IpAddress.String;
+         if ( ipAddress.compare( "0.0.0.0" ) != 0 )
+         {
+            buffer << pAdapter->IpAddressList.IpAddress.String << std::endl;
+         }
+         pAdapter = pAdapter->Next;
+      }
+   }
+
+   free( pAdapterInfo );
+
+   std::string s = buffer.str().c_str();
+   std::wstring wsTmp( s.begin(), s.end() );
+
+   wcsncpy_s( string, length, wsTmp.c_str(), _TRUNCATE );
+   string[ length - 1 ] = '\0';
+   return true;
+}
 
 //
 //  FUNCTION: MyRegisterClass()
@@ -178,6 +197,7 @@ BOOL AddNotificationIcon( HWND hWnd )
    nid.uCallbackMessage = WMAPP_NOTIFYCALLBACK;
    nid.hIcon = ::LoadIcon( hInst, MAKEINTRESOURCE( IDI_QUICKINFOTRAY ) );
    LoadString( hInst, IDS_TOOLTIP, nid.szTip, ARRAYSIZE( nid.szTip ) );
+
    Shell_NotifyIcon( NIM_ADD, &nid );
 
    // NOTIFYICON_VERSION_4 is prefered
@@ -200,8 +220,8 @@ BOOL ShowQuickInfo()
    nid.guidItem = __uuidof( QuickInfoIcon );
    nid.dwInfoFlags = NIIF_INFO;
    LoadString( hInst, IDS_QUICKINFO_TITLE, nid.szInfoTitle, ARRAYSIZE( nid.szInfoTitle ) );
-   LoadString( hInst, IDS_CONNECTIONS, nid.szInfo, ARRAYSIZE( nid.szInfo ) );
-   quickInfoVisible = TRUE;
+   //LoadString( hInst, IDS_CONNECTIONS, nid.szInfo, ARRAYSIZE( nid.szInfo ) );
+   PopulateInfo( nid.szInfo, ARRAYSIZE( nid.szInfo ) );
    return Shell_NotifyIcon( NIM_MODIFY, &nid );
 }
 
@@ -211,7 +231,6 @@ BOOL HideQuickInfo()
    NOTIFYICONDATA nid = { sizeof( nid ) };
    nid.uFlags = NIF_GUID | NIF_SHOWTIP;
    nid.guidItem = __uuidof( QuickInfoIcon );
-   quickInfoVisible = FALSE;
    return Shell_NotifyIcon( NIM_MODIFY, &nid );
 }
 
