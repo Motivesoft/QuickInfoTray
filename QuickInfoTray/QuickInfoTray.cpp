@@ -218,7 +218,7 @@ BOOL ShowQuickInfo()
    NOTIFYICONDATA nid = { sizeof( nid ) };
    nid.uFlags = NIF_GUID | NIF_INFO;
    nid.guidItem = __uuidof( QuickInfoIcon );
-   nid.dwInfoFlags = NIIF_INFO;
+   //nid.dwInfoFlags = NIIF_INFO;
    LoadString( hInst, IDS_QUICKINFO_TITLE, nid.szInfoTitle, ARRAYSIZE( nid.szInfoTitle ) );
    //LoadString( hInst, IDS_CONNECTIONS, nid.szInfo, ARRAYSIZE( nid.szInfo ) );
    PopulateInfo( nid.szInfo, ARRAYSIZE( nid.szInfo ) );
