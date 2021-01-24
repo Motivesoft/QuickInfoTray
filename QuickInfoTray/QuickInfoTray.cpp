@@ -8,10 +8,17 @@
 #include "QuickInfoTray.h"
 
 #pragma comment(lib, "IPHLPAPI.lib")
+#pragma comment(lib, "VERSION.lib")
 
 #define MAX_LOADSTRING 100
 
 UINT const WMAPP_NOTIFYCALLBACK = WM_APP + 1;
+
+struct LANGANDCODEPAGE
+{
+   WORD wLanguage;
+   WORD wCodePage;
+} *lpTranslate;
 
 // Use a guid to uniquely identify our icon
 class __declspec( uuid( "8DCFC718-F9D0-4813-BBB5-AAE0AF07031D" ) ) QuickInfoIcon;
@@ -326,16 +333,6 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam 
          }
       }
       break;
-      /*
-      case WM_PAINT:
-      {
-         PAINTSTRUCT ps;
-         HDC hdc = BeginPaint( hWnd, &ps );
-         // TODO: Add any drawing code that uses hdc here...
-         EndPaint( hWnd, &ps );
-         break;
-      }
-       */
       case WM_DESTROY:
       {
          DeleteNotificationIcon();
@@ -350,6 +347,104 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam 
    return 0;
 }
 
+BOOL SetCopyright(HWND hDlg)
+{
+   TCHAR szExeFileName[ MAX_PATH ];
+   GetModuleFileName( NULL, szExeFileName, MAX_PATH );
+
+   DWORD dwHandle;
+   DWORD dwSize = GetFileVersionInfoSize( szExeFileName, &dwHandle );
+   LPBYTE data = new BYTE[ dwSize ];
+   if ( GetFileVersionInfo( szExeFileName, 0, dwSize, data ) )
+   {
+      LPBYTE buffer;
+      UINT length;
+      if ( VerQueryValue( data, L"\\", (LPVOID*) &buffer, &length ) )
+      {
+         VS_FIXEDFILEINFO* fixedFileInfo = (VS_FIXEDFILEINFO*) buffer;
+         if ( fixedFileInfo->dwSignature == 0xFEEF04BD )
+         {
+            // Can get basic version info here
+         }
+
+         LANGANDCODEPAGE* lpTranslate;
+         UINT cbTranslate;
+         VerQueryValue( data,
+                        TEXT( "\\VarFileInfo\\Translation" ),
+                        (LPVOID*) &lpTranslate,
+                        &cbTranslate );
+
+         // Read the file description for each language and code page.
+
+         for ( unsigned int i = 0; i < ( cbTranslate / sizeof( struct LANGANDCODEPAGE ) ); i++ )
+         {
+            WCHAR subBlock[ 50 ];
+            std::wstringstream identifier;
+            if ( StringCchPrintf( subBlock, 50,
+                                  TEXT( "\\StringFileInfo\\%04x%04x\\FileDescription" ),
+                                  lpTranslate[ i ].wLanguage,
+                                  lpTranslate[ i ].wCodePage ) == 0 )
+            {
+               LPVOID lpBuffer;
+               UINT dwBytes;
+               // Retrieve file description for language and code page "i". 
+               VerQueryValue( data,
+                              subBlock,
+                              &lpBuffer,
+                              &dwBytes );
+
+               HWND hCtrl = GetDlgItem( hDlg, IDC_IDENTIFIER );
+               if ( hCtrl != NULL )
+               {
+                  identifier << (LPWSTR) lpBuffer;
+               }
+            }
+            if ( StringCchPrintf( subBlock, 50,
+                                  TEXT( "\\StringFileInfo\\%04x%04x\\FileVersion" ),
+                                  lpTranslate[ i ].wLanguage,
+                                  lpTranslate[ i ].wCodePage ) == 0 )
+            {
+               LPVOID lpBuffer;
+               UINT dwBytes;
+               // Retrieve file description for language and code page "i". 
+               VerQueryValue( data,
+                              subBlock,
+                              &lpBuffer,
+                              &dwBytes );
+
+               HWND hCtrl = GetDlgItem( hDlg, IDC_IDENTIFIER );
+               if ( hCtrl != NULL )
+               {
+                  identifier << L" " << (LPWSTR) lpBuffer;
+                  SendMessage( hCtrl, WM_SETTEXT, 0, (LPARAM) identifier.str().c_str() );
+               }
+            }
+            if( StringCchPrintf( subBlock, 50,
+                                 TEXT( "\\StringFileInfo\\%04x%04x\\LegalCopyright" ),
+                                 lpTranslate[ i ].wLanguage,
+                                 lpTranslate[ i ].wCodePage ) == 0 )
+            {
+               LPVOID lpBuffer;
+               UINT dwBytes;
+               // Retrieve file description for language and code page "i". 
+               VerQueryValue( data,
+                              subBlock,
+                              &lpBuffer,
+                              &dwBytes );
+
+               HWND hCtrl = GetDlgItem( hDlg, IDC_COPYRIGHT );
+               if ( hCtrl != NULL )
+               {
+                  SendMessage( hCtrl, WM_SETTEXT, 0, (LPARAM) lpBuffer );
+               }
+            }
+         }
+      }
+   }
+
+   return TRUE;
+}
+
 // Message handler for about box.
 INT_PTR CALLBACK About( HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam )
 {
@@ -357,7 +452,10 @@ INT_PTR CALLBACK About( HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam )
    switch ( message )
    {
       case WM_INITDIALOG:
+      {
+         SetCopyright( hDlg );
          return (INT_PTR) TRUE;
+      }
 
       case WM_COMMAND:
          if ( LOWORD( wParam ) == IDOK || LOWORD( wParam ) == IDCANCEL )

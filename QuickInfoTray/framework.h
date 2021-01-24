@@ -11,6 +11,7 @@
 #include <windows.h>
 #include <shellapi.h>
 #include <iphlpapi.h>
+#include <strsafe.h>
 
 // C RunTime Header Files
 #include <stdlib.h>
