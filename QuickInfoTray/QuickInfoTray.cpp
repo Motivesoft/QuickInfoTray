@@ -21,7 +21,7 @@ struct LANGANDCODEPAGE
 } *lpTranslate;
 
 // Use a guid to uniquely identify our icon
-class __declspec( uuid( "8DCFC718-F9D0-4813-BBB5-AAE0AF07031D" ) ) QuickInfoIcon;
+class __declspec( uuid( "1BF1C1FA-3637-4C14-91D3-1850DB623F6E" ) ) QuickInfoIcon;
 
 // Global Variables:
 HINSTANCE hInst;                                // current instance
@@ -100,30 +100,36 @@ BOOL PopulateInfo( WCHAR* string, size_t length )
       result = ::GetAdaptersInfo( pAdapterInfo, &size );
    }
 
+   bool limited = false;
+   int count = 0;
    PIP_ADAPTER_INFO pAdapter = pAdapterInfo;
    while ( pAdapter != NULL )
    {
       std::string ipAddress = pAdapter->IpAddressList.IpAddress.String;
       if ( ipAddress.compare( "0.0.0.0" ) != 0 )
       {
-         buffer << pAdapter->Description << ":" << pAdapter->IpAddressList.IpAddress.String << std::endl;
+         if ( ++count == 3 )
+         {
+            limited = true;
+            break;
+         }
       }
       pAdapter = pAdapter->Next;
    }
 
-   // Do a reduced version if need be
-   if ( buffer.str().length() > length )
+   pAdapter = pAdapterInfo;
+   while ( pAdapter != NULL )
    {
-      PIP_ADAPTER_INFO pAdapter = pAdapterInfo;
-      while ( pAdapter != NULL )
+      std::string ipAddress = pAdapter->IpAddressList.IpAddress.String;
+      if ( ipAddress.compare( "0.0.0.0" ) != 0 )
       {
-         std::string ipAddress = pAdapter->IpAddressList.IpAddress.String;
-         if ( ipAddress.compare( "0.0.0.0" ) != 0 )
+         // TODO special case for 10. is a bit too hard-coded
+         if ( !limited || ipAddress.substr(0,3) == "10." )
          {
-            buffer << pAdapter->IpAddressList.IpAddress.String << std::endl;
+            buffer << pAdapter->Description << ":" << pAdapter->IpAddressList.IpAddress.String << std::endl;
          }
-         pAdapter = pAdapter->Next;
       }
+      pAdapter = pAdapter->Next;
    }
 
    free( pAdapterInfo );
