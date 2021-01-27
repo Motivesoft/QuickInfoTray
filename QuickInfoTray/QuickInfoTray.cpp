@@ -13,6 +13,8 @@
 #define MAX_LOADSTRING 100
 
 UINT const WMAPP_NOTIFYCALLBACK = WM_APP + 1;
+UINT const WMAPP_HIDEFLYOUT = WM_APP + 2;
+UINT_PTR const HIDEFLYOUT_TIMER_ID = 1;
 
 struct LANGANDCODEPAGE
 {
@@ -24,7 +26,7 @@ struct LANGANDCODEPAGE
 class __declspec( uuid( "1BF1C1FA-3637-4C14-91D3-1850DB623F6E" ) ) QuickInfoIcon;
 
 // Global Variables:
-HINSTANCE hInst;                                // current instance
+HINSTANCE hInst;                                  // current instance
 WCHAR szTitle[ MAX_LOADSTRING ];                  // The title bar text
 WCHAR szWindowClass[ MAX_LOADSTRING ];            // the main window class name
 
@@ -46,7 +48,7 @@ int APIENTRY wWinMain( _In_ HINSTANCE hInstance,
 
    // Initialize global strings
    LoadStringW( hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING );
-   LoadStringW( hInstance, IDC_QUICKINFOTRAY, szWindowClass, MAX_LOADSTRING );
+   LoadStringW( hInstance, IDS_QUICKINFOTRAY, szWindowClass, MAX_LOADSTRING );
    MyRegisterClass( hInstance );
 
    // Perform application initialization:
@@ -247,6 +249,88 @@ BOOL HideQuickInfo()
    return Shell_NotifyIcon( NIM_MODIFY, &nid );
 }
 
+void PositionFlyout( HWND hwnd, REFGUID guidIcon )
+{
+   // find the position of our printer icon
+   NOTIFYICONIDENTIFIER nii = { sizeof( nii ) };
+   nii.guidItem = guidIcon;
+   RECT rcIcon;
+   HRESULT hr = Shell_NotifyIconGetRect( &nii, &rcIcon );
+   if ( SUCCEEDED( hr ) )
+   {
+      // display the flyout in an appropriate position close to the printer icon
+      POINT const ptAnchor = { ( rcIcon.left + rcIcon.right ) / 2, ( rcIcon.top + rcIcon.bottom ) / 2 };
+
+      RECT rcWindow;
+      GetWindowRect( hwnd, &rcWindow );
+      SIZE sizeWindow = { rcWindow.right - rcWindow.left, rcWindow.bottom - rcWindow.top };
+
+      if ( CalculatePopupWindowPosition( &ptAnchor, &sizeWindow, TPM_VERTICAL | TPM_VCENTERALIGN | TPM_CENTERALIGN | TPM_WORKAREA, &rcIcon, &rcWindow ) )
+      {
+         // position the flyout and make it the foreground window
+         SetWindowPos( hwnd, HWND_TOPMOST, rcWindow.left, rcWindow.top, 0, 0, SWP_NOSIZE | SWP_SHOWWINDOW );
+      }
+   }
+}
+
+BOOL CALLBACK DlgProc( HWND hwndDlg, UINT message, WPARAM wParam, LPARAM lParam )
+{
+   switch ( message )
+   {
+      case WM_INITDIALOG:
+         // Populate the dialog
+
+         return TRUE;
+
+      case WM_COMMAND:
+         switch ( LOWORD( wParam ) )
+         {
+            case IDOK:
+               return TRUE;
+
+            case IDCANCEL:
+               DestroyWindow( hwndDlg );
+               return TRUE;
+         }
+   }
+   return FALSE;
+}
+HWND ShowFlyout( HWND hwndMainWindow )
+{
+   HWND hwnd = CreateDialog( hInst, MAKEINTRESOURCE( IDD_INFOPOPUP ), hwndMainWindow, (DLGPROC) DlgProc );
+
+   NOTIFYICONIDENTIFIER nii = { sizeof( nii ) };
+   nii.guidItem = __uuidof( QuickInfoIcon );
+   RECT rcIcon;
+   HRESULT hr = Shell_NotifyIconGetRect( &nii, &rcIcon );
+   if ( SUCCEEDED( hr ) )
+   {
+      // display the flyout in an appropriate position close to the printer icon
+      POINT const ptAnchor = { ( rcIcon.left + rcIcon.right ) / 2, ( rcIcon.top + rcIcon.bottom ) / 2 };
+
+      RECT rcWindow;
+      GetWindowRect( hwnd, &rcWindow );
+      SIZE sizeWindow = { rcWindow.right - rcWindow.left, rcWindow.bottom - rcWindow.top };
+
+      if ( CalculatePopupWindowPosition( &ptAnchor, &sizeWindow, TPM_VERTICAL | TPM_VCENTERALIGN | TPM_CENTERALIGN | TPM_WORKAREA, &rcIcon, &rcWindow ) )
+      {
+         // position the flyout and make it the foreground window
+         SetWindowPos( hwnd, HWND_TOPMOST, rcWindow.left, rcWindow.top, 0, 0, SWP_NOSIZE | SWP_SHOWWINDOW );
+      }
+   }
+
+   ShowWindow( hwnd, SW_SHOW );
+   return hwnd;
+}
+
+void HideFlyout( HWND hwndMainWindow, HWND hwndFlyout )
+{
+   if ( hwndFlyout == NULL )
+      return;
+
+   DestroyWindow( hwndFlyout );
+}
+
 void ShowContextMenu( HWND hwnd, POINT pt )
 {
    HMENU hMenu = LoadMenu( hInst, MAKEINTRESOURCE( IDC_CONTEXTMENU ) );
@@ -287,11 +371,19 @@ void ShowContextMenu( HWND hwnd, POINT pt )
 //
 LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam )
 {
+   static HWND s_hwndFlyout = NULL;
+
    switch ( message )
    {
       case WM_CREATE:
       {
          AddNotificationIcon( hWnd );
+         break;
+      }
+      case WMAPP_HIDEFLYOUT:
+      {
+         HideFlyout( hWnd, s_hwndFlyout );
+         s_hwndFlyout = NULL;
          break;
       }
       case WMAPP_NOTIFYCALLBACK:
@@ -300,17 +392,23 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam 
          {
             case NIN_SELECT:
             {
-               ShowQuickInfo();
+               if ( s_hwndFlyout == NULL )
+               {
+                  s_hwndFlyout = ShowFlyout( hWnd );
+               }
+               //ShowQuickInfo();
                break;
             }
             case NIN_BALLOONTIMEOUT:
             {
-               HideQuickInfo();
+               //HideQuickInfo();
                break;
             }
             case NIN_BALLOONUSERCLICK:
             {
-               HideQuickInfo();
+               HideFlyout( hWnd, s_hwndFlyout );
+               s_hwndFlyout = NULL;
+               //HideQuickInfo();
                break;
             }
             case WM_CONTEXTMENU:
