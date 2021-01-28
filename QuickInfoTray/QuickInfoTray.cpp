@@ -36,6 +36,8 @@ BOOL                InitInstance( HINSTANCE, int );
 LRESULT CALLBACK    WndProc( HWND, UINT, WPARAM, LPARAM );
 INT_PTR CALLBACK    About( HWND, UINT, WPARAM, LPARAM );
 
+HWND s_hwndFlyout = NULL;
+
 int APIENTRY wWinMain( _In_ HINSTANCE hInstance,
                        _In_opt_ HINSTANCE hPrevInstance,
                        _In_ LPWSTR    lpCmdLine,
@@ -278,26 +280,117 @@ BOOL CALLBACK DlgProc( HWND hwndDlg, UINT message, WPARAM wParam, LPARAM lParam 
    switch ( message )
    {
       case WM_INITDIALOG:
+      {
          // Populate the dialog
-
          return TRUE;
+      }
 
       case WM_COMMAND:
          switch ( LOWORD( wParam ) )
          {
-            case IDOK:
-               return TRUE;
-
             case IDCANCEL:
                DestroyWindow( hwndDlg );
+               s_hwndFlyout = NULL;
                return TRUE;
          }
    }
    return FALSE;
 }
+
+
+
+
+
+
+
+
+
+BOOL PopulateInfo( HWND hDlg )
+{
+   ULONG size = sizeof( IP_ADAPTER_INFO );
+   PIP_ADAPTER_INFO pAdapterInfo = (PIP_ADAPTER_INFO) malloc( sizeof( IP_ADAPTER_INFO ) );
+
+   if ( pAdapterInfo == NULL )
+   {
+      MessageBox( NULL, L"Cannot allocate enough memory", L"Error", MB_OK );
+      return false;
+   }
+
+   ULONG result = ::GetAdaptersInfo( pAdapterInfo, &size );
+   if ( result == ERROR_BUFFER_OVERFLOW )
+   {
+      free( pAdapterInfo );
+      pAdapterInfo = (PIP_ADAPTER_INFO) malloc( size );
+
+      if ( pAdapterInfo == NULL )
+      {
+         MessageBox( NULL, L"Cannot allocate enough memory", L"Error", MB_OK );
+         return false;
+      }
+
+      result = ::GetAdaptersInfo( pAdapterInfo, &size );
+   }
+
+   int label = IDC_STATIC1;
+   int field = IDC_EDIT1;
+   HWND hCtrl;
+   PIP_ADAPTER_INFO pAdapter = pAdapterInfo;
+   while ( pAdapter != NULL )
+   {
+      if ( label == IDC_STATIC8 )
+      {
+         // Capacity
+         break;
+      }
+
+      std::string ipAddress = pAdapter->IpAddressList.IpAddress.String;
+      if ( ipAddress.compare( "0.0.0.0" ) != 0 )
+      {
+         // TODO special case for 10. is a bit too hard-coded
+         hCtrl = GetDlgItem( hDlg, label++ );
+         if ( hCtrl != NULL )
+         {
+            SendMessageA( hCtrl, WM_SETTEXT, 0, (LPARAM) pAdapter->Description );
+         }
+         hCtrl = GetDlgItem( hDlg, field++ );
+         if ( hCtrl != NULL )
+         {
+            SendMessageA( hCtrl, WM_SETTEXT, 0, (LPARAM) pAdapter->IpAddressList.IpAddress.String );
+         }
+      }
+      pAdapter = pAdapter->Next;
+   }
+
+   while ( label <= IDC_STATIC8 )
+   {
+      hCtrl = GetDlgItem( hDlg, label++ );
+      if ( hCtrl != NULL )
+      {
+         SendMessageA( hCtrl, WM_SETTEXT, 0, (LPARAM) "" );
+      }
+      hCtrl = GetDlgItem( hDlg, field++ );
+      if ( hCtrl != NULL )
+      {
+         SendMessageA( hCtrl, WM_SETTEXT, 0, (LPARAM) "" );
+      }
+   }
+
+   free( pAdapterInfo );
+
+   return true;
+}
+
+
+
+
+
+
 HWND ShowFlyout( HWND hwndMainWindow )
 {
    HWND hwnd = CreateDialog( hInst, MAKEINTRESOURCE( IDD_INFOPOPUP ), hwndMainWindow, (DLGPROC) DlgProc );
+
+   PopulateInfo( hwnd );
+
 
    NOTIFYICONIDENTIFIER nii = { sizeof( nii ) };
    nii.guidItem = __uuidof( QuickInfoIcon );
@@ -371,8 +464,6 @@ void ShowContextMenu( HWND hwnd, POINT pt )
 //
 LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam )
 {
-   static HWND s_hwndFlyout = NULL;
-
    switch ( message )
    {
       case WM_CREATE:
@@ -401,6 +492,8 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam 
             }
             case NIN_BALLOONTIMEOUT:
             {
+               HideFlyout( hWnd, s_hwndFlyout );
+               s_hwndFlyout = NULL;
                //HideQuickInfo();
                break;
             }

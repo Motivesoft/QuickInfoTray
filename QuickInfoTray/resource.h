@@ -18,14 +18,25 @@
 #define IDC_QUICKINFOTRAY               109
 #define IDS_QUICKINFOTRAY               109
 #define IDR_MAINFRAME                   128
-#define IDD_INFODIALOG                  130
 #define IDD_INFOPOPUP                   130
 #define IDC_COPYRIGHT                   1000
-#define IDC_IDENTIFIER                  1001
-#define ID__EXIT                        32771
-#define ID__ABOUT                       32772
-#define ID__EXIT32773                   32773
-#define IDM__ABOUT                      32774
+#define IDC_IDENTIFIER                  1111
+#define IDC_EDIT1                       1001
+#define IDC_EDIT2                       1002
+#define IDC_EDIT3                       1003
+#define IDC_EDIT4                       1004
+#define IDC_EDIT5                       1005
+#define IDC_EDIT6                       1006
+#define IDC_EDIT7                       1007
+#define IDC_EDIT8                       1008
+#define IDC_STATIC1                     1011
+#define IDC_STATIC2                     1012
+#define IDC_STATIC3                     1013
+#define IDC_STATIC4                     1014
+#define IDC_STATIC5                     1015
+#define IDC_STATIC6                     1016
+#define IDC_STATIC7                     1017
+#define IDC_STATIC8                     1018
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -35,7 +46,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        131
 #define _APS_NEXT_COMMAND_VALUE         32775
-#define _APS_NEXT_CONTROL_VALUE         1002
+#define _APS_NEXT_CONTROL_VALUE         1008
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif
